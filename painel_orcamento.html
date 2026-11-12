@@ -1,0 +1,84 @@
+<!DOCTYPE html>
+<html lang="pt-BR"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Painel · Simulações de orçamento</title>
+<style>
+:root{--navy:#14224f;--gold:#e0a82e;--bg:#f3f1ec;--ink:#1c2240;--mut:#6b7191;--line:#e3ded3;--ok:#1f8f5f;--red:#c23a2b}
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:system-ui,-apple-system,'Segoe UI',sans-serif;background:var(--bg);color:var(--ink);padding-bottom:40px}
+header{background:var(--navy);color:#fff;padding:14px 16px;display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+header b{font-size:18px;flex:1}
+.w{max-width:980px;margin:0 auto;padding:0 14px}
+.card{background:#fff;border:1px solid var(--line);border-radius:14px;padding:16px;margin-top:14px}
+h2{font-size:16px;margin-bottom:10px;color:var(--navy)}
+.kp{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:10px;margin-top:14px}
+.k{background:#fff;border:1px solid var(--line);border-radius:14px;padding:12px}
+.k b{display:block;font-size:26px;color:var(--navy)}.k span{font-size:12.5px;color:var(--mut)}
+.bar{display:flex;align-items:center;gap:8px;margin:6px 0;font-size:13.5px}
+.bar .n{width:150px;flex:0 0 150px}.bar .t{flex:1;background:#eee9de;border-radius:99px;height:16px;overflow:hidden}
+.bar .t i{display:block;height:100%;background:var(--gold);border-radius:99px}.bar .v{width:88px;text-align:right;color:var(--mut);font-size:12.5px}
+.g2{display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:14px}
+select,button{font:inherit;padding:8px 12px;border-radius:10px;border:1px solid var(--line);background:#fff;cursor:pointer}
+button.p{background:var(--gold);border:0;font-weight:700}
+table{width:100%;border-collapse:collapse;font-size:13px}th,td{text-align:left;padding:7px 6px;border-bottom:1px solid var(--line);white-space:nowrap}
+th{color:var(--mut);font-weight:600;font-size:12px}.sc{overflow-x:auto}
+.tag{display:inline-block;padding:2px 8px;border-radius:99px;font-size:11.5px;font-weight:700}.tag.y{background:#e3f6ec;color:#14663f}.tag.no{background:#eee}
+#lock{max-width:320px;margin:90px auto;background:#fff;border:1px solid var(--line);border-radius:16px;padding:22px;text-align:center}
+#lock input{width:100%;padding:12px;font-size:18px;text-align:center;border:2px solid var(--line);border-radius:12px;margin:12px 0}
+.er{color:var(--red);font-size:13px;min-height:18px}
+</style></head><body>
+<div id="lock"><h2>Painel de simulações</h2><p style="color:var(--mut);font-size:14px">Área restrita</p>
+<input id="pw" type="password" inputmode="numeric" placeholder="Senha" onkeydown="if(event.key==='Enter')entrar()"><div class="er" id="er"></div><button class="p" style="width:100%" onclick="entrar()">Entrar</button></div>
+<div id="main" style="display:none">
+<header><b>Simulações de orçamento</b>
+<select id="per" onchange="desenhar()"><option value="1">Hoje</option><option value="7" selected>Últimos 7 dias</option><option value="30">Últimos 30 dias</option><option value="0">Tudo</option></select>
+<button class="p" onclick="carregar()">Atualizar</button></header>
+<div class="w"><div id="st" style="color:var(--mut);font-size:13px;margin-top:10px">Carregando...</div>
+<div class="kp" id="kp"></div>
+<div class="card"><h2>Funil: até onde os visitantes chegaram</h2><div id="fun"></div></div>
+<div class="g2"><div class="card"><h2>Cardápio escolhido</h2><div id="c1"></div></div><div class="card"><h2>Forma de pagamento</h2><div id="c2"></div></div>
+<div class="card"><h2>Pagantes</h2><div id="c3"></div></div><div class="card"><h2>Dia da semana</h2><div id="c4"></div></div></div>
+<div class="card"><h2>Cardápio Diversão</h2><div id="dv"></div></div>
+<div class="card"><h2>Últimas simulações</h2><div class="sc"><table id="tb"></table></div></div></div></div>
+<script type="module">
+import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
+import { getDatabase, ref, get } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-database.js";
+import { getAuth, signInAnonymously } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
+const cfg={apiKey:"AIzaSyBTjBSxWwqwt1RDbACTwuEvbn-bkZlHOs8",authDomain:"buffet-checklist.firebaseapp.com",databaseURL:"https://buffet-checklist-default-rtdb.firebaseio.com",projectId:"buffet-checklist",appId:"1:658392974555:web:44ba7507eecc0ed78d38fe"};
+const app=initializeApp(cfg,'painel');const auth=getAuth(app);const db=getDatabase(app);
+let DADOS=[];
+const $=id=>document.getElementById(id);
+const ETAPAS=[['boasvindas','Abriram o link'],['cardapios','Viram os cardápios'],['data','Foram para as perguntas'],['pagantes','Responderam a data'],['blackfriday','Escolheram os pagantes'],['pagamento','Escolheram o pagamento'],['escolha','Viram os valores dos cardápios'],['beneficio','Escolheram o cardápio'],['resumo','Viram o orçamento'],['fechar','Chegaram ao fechamento'],['WA','Clicaram no WhatsApp']];
+const NC={diversao:'Diversão',premium:'Premium',diamante:'Diamante',master:'Master',top:'Top'};
+const NP={avista:'À vista (pix)',pix:'Entrada + parcelas pix',cartao:'Entrada + parcelas cartão',x10:'10x no cartão'};
+const R=v=>(v||0).toLocaleString('pt-BR',{style:'currency',currency:'BRL'});
+window.entrar=()=>{ if($('pw').value==='349'){ try{sessionStorage.setItem('orc_ok','1')}catch(e){} abrir(); } else { $('er').textContent='Senha incorreta'; $('pw').value=''; } };
+function abrir(){ $('lock').style.display='none'; $('main').style.display='block'; carregar(); }
+window.carregar=async()=>{
+  $('st').textContent='Carregando...';
+  try{ if(!auth.currentUser) await signInAnonymously(auth); const s=await get(ref(db,'orcamento_sim')); const v=s.val()||{}; DADOS=Object.keys(v).map(k=>Object.assign({id:k},v[k])); $('st').textContent='Atualizado às '+new Date().toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'}); desenhar(); }
+  catch(e){ $('st').textContent='Não consegui ler os dados: '+(e.code||e.message)+'. Verifique as regras do Firebase para "orcamento_sim".'; }
+};
+function filtrar(){ const d=+$('per').value; if(!d) return DADOS; const lim=d===1?new Date().setHours(0,0,0,0):Date.now()-d*864e5; return DADOS.filter(x=>(x.ini||0)>=lim); }
+const cont=(arr,f)=>{const o={};arr.forEach(x=>{const k=f(x);if(k)o[k]=(o[k]||0)+1});return o};
+function barras(el,o,nomes,total){ const ks=Object.keys(o).sort((a,b)=>o[b]-o[a]); el.innerHTML=ks.length?ks.map(k=>`<div class="bar"><span class="n">${(nomes&&nomes[k])||k}</span><span class="t"><i style="width:${total?o[k]/total*100:0}%"></i></span><span class="v">${o[k]} (${Math.round(o[k]/total*100)}%)</span></div>`).join(''):'<span style="color:var(--mut);font-size:13px">Sem dados ainda</span>'; }
+window.desenhar=()=>{
+  const L=filtrar(); const n=L.length;
+  const wa=L.filter(x=>x.cliqueWA).length, fe=L.filter(x=>x.etapas&&x.etapas.fechar).length;
+  const dur=L.map(x=>(x.ult&&x.ini)?(x.ult-x.ini)/1000:0).filter(x=>x>0).sort((a,b)=>a-b); const med=dur.length?dur[Math.floor(dur.length/2)]:0;
+  $('kp').innerHTML=`<div class="k"><b>${n}</b><span>visitas</span></div><div class="k"><b>${fe}</b><span>chegaram ao fechamento</span></div><div class="k"><b>${wa}</b><span>clicaram no WhatsApp</span></div><div class="k"><b>${n?Math.round(wa/n*100):0}%</b><span>conversão (visita → WhatsApp)</span></div><div class="k"><b>${med>=60?Math.round(med/60)+' min':Math.round(med)+' s'}</b><span>tempo mediano</span></div>`;
+  const f=ETAPAS.map(([k,t])=>[t,k==='WA'?wa:L.filter(x=>x.etapas&&x.etapas[k]).length]);
+  $('fun').innerHTML=f.map(([t,v])=>`<div class="bar"><span class="n" style="width:200px;flex-basis:200px">${t}</span><span class="t"><i style="width:${n?v/n*100:0}%"></i></span><span class="v">${v} (${n?Math.round(v/n*100):0}%)</span></div>`).join('');
+  const ve=L.filter(x=>x.card);
+  barras($('c1'),cont(ve,x=>x.card),NC,ve.length);
+  const vp=L.filter(x=>x.pgto); barras($('c2'),cont(vp,x=>x.pgto),NP,vp.length);
+  const vq=L.filter(x=>x.pag); barras($('c3'),cont(vq,x=>x.pag+' pagantes'),null,vq.length);
+  const vd=L.filter(x=>x.dia); barras($('c4'),cont(vd,x=>x.dia==='semana'?'Segunda a quinta':'Sexta, sáb, dom ou feriado'),null,vd.length);
+  const vi=L.filter(x=>x.viuDiversao).length, qu=L.filter(x=>x.cliqueDiversao).length, dw=L.filter(x=>x.card==='diversao'&&x.cliqueWA).length;
+  $('dv').innerHTML=`<div class="bar"><span class="n">Viram a oferta</span><b>${vi}</b></div><div class="bar"><span class="n">Clicaram "Quero essa oferta"</span><b>${qu}</b></div><div class="bar"><span class="n">Foram ao WhatsApp</span><b>${dw}</b></div>`;
+  const rows=L.slice().sort((a,b)=>(b.ini||0)-(a.ini||0)).slice(0,60);
+  const ult=x=>{const e=x.etapas||{};let m='';ETAPAS.forEach(([k,t])=>{if(k!=='WA'&&e[k])m=t});return m};
+  $('tb').innerHTML='<tr><th>Data</th><th>Chegou até</th><th>Dia</th><th>Pagantes</th><th>Pagamento</th><th>Cardápio</th><th>Valor</th><th>Tempo</th><th>Aparelho</th><th>WhatsApp</th></tr>'+rows.map(x=>{const d=new Date(x.ini||0);const t=(x.ult&&x.ini)?Math.round((x.ult-x.ini)/1000):0;
+   return `<tr><td>${d.toLocaleDateString('pt-BR',{day:'2-digit',month:'2-digit'})} ${d.toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'})}</td><td>${ult(x)}</td><td>${x.dia==='semana'?'Seg–qui':x.dia==='fds'?'Sex–dom/fer':''}</td><td>${x.pag||''}</td><td>${NP[x.pgto]||''}</td><td>${NC[x.card]||''}</td><td>${x.valor?R(x.valor):''}</td><td>${t>=60?Math.floor(t/60)+'min '+t%60+'s':t+'s'}</td><td>${x.disp||''}</td><td>${x.cliqueWA?'<span class="tag y">Sim</span>':'<span class="tag no">Não</span>'}</td></tr>`}).join('');
+};
+try{ if(sessionStorage.getItem('orc_ok')==='1') abrir(); }catch(e){}
+</script></body></html>
